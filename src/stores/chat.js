@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed } from 'vue'
 
 const API_URL = 'http://localhost:8088'
 const WELCOME_MESSAGE = '你好！我是你的智能办公助手。我可以帮你制定销售计划、处理审批流程、查询业务数据等。有什么我可以帮助你的吗？'
@@ -11,14 +11,17 @@ export const useChatStore = defineStore('chat', () => {
   const loading = ref(false)
   const error = ref(null)
   
+  // Agent 状态推送（工具调用过程）
+  const currentStatus = ref('')
+  
   // 执行阶段状态
   const currentExecutionStage = ref('')
   const executionStatus = ref('idle')
   
-  // 推理过程（用户可见的思考内容）
+  // 推理过程
   const thinkingContent = ref('')
   
-  // 工作流阶段（用于显示进度条）
+  // 工作流阶段
   const workflowStages = ref([])
   const currentProgress = ref(0)
   
@@ -30,29 +33,18 @@ export const useChatStore = defineStore('chat', () => {
   const currentMessages = computed(() => {
     return currentChat.value?.messages || []
   })
-  
-  const currentExecutionStageText = computed(() => {
-    const stageTextMap = {
-      // 通用阶段
-      'understanding': '正在理解您的需求',
-      'generating': '正在生成回复',
-      'thinking': '正在思考',
-      'processing': '正在处理数据',
-      // 工作流步骤
-      'searching': '正在搜索客户信息',
-      'fetching_contacts': '正在获取联系人',
-      'fetching_phases': '正在加载销售阶段',
-      'fetching_actions': '正在加载销售动作',
-      'selecting_customer': '请选择客户',
-      'selecting_contact': '请选择联系人',
-      'confirming': '请确认信息',
-      'creating': '正在创建计划',
-      'completed': '处理完成'
-    }
-    return stageTextMap[currentExecutionStage.value] || currentExecutionStage.value || '正在思考'
-  })
 
   // Actions
+  
+  // 设置当前状态（工具调用过程）
+  function setCurrentStatus(status) {
+    currentStatus.value = status
+  }
+  
+  // 清除状态
+  function clearStatus() {
+    currentStatus.value = ''
+  }
   
   // 加载会话列表
   async function loadChats() {
@@ -69,7 +61,6 @@ export const useChatStore = defineStore('chat', () => {
             messageCount: s.message_count
           }))
           currentChatId.value = chats.value[0].id
-          // 加载第一个会话的历史消息
           await loadChatHistory(chats.value[0].id)
           return
         }
@@ -78,7 +69,6 @@ export const useChatStore = defineStore('chat', () => {
       console.error('加载会话列表失败:', e)
     }
     
-    // 降级：从 localStorage 加载
     const saved = localStorage.getItem('chats')
     if (saved) {
       chats.value = JSON.parse(saved)
@@ -90,14 +80,12 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
   
-  // 刷新会话标题（不影响当前消息）
   async function refreshTitles() {
     try {
       const res = await fetch(`${API_URL}/sessions`)
       if (res.ok) {
         const data = await res.json()
         if (data.sessions && data.sessions.length > 0) {
-          // 只更新标题，不改变消息
           data.sessions.forEach(s => {
             const chat = chats.value.find(c => c.sessionId === s.session_id)
             if (chat && chat.title !== s.title) {
@@ -111,12 +99,9 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
   
-  // 加载会话历史消息
   async function loadChatHistory(chatId) {
     const chat = chats.value.find(c => c.id === chatId)
     if (!chat || !chat.sessionId) return
-    
-    // 如果已有消息，不再重复加载
     if (chat.messages && chat.messages.length > 0) return
     
     try {
@@ -124,7 +109,6 @@ export const useChatStore = defineStore('chat', () => {
       if (res.ok) {
         const data = await res.json()
         if (data.messages && data.messages.length > 0) {
-          // 欢迎消息与历史消息合并
           const hasWelcome = chat.messages.some(m => m.isWelcome)
           const historyMessages = data.messages.map(m => ({
             id: m.message_id,
@@ -141,7 +125,6 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
   
-  // 创建新会话
   async function createChat() {
     try {
       const res = await fetch(`${API_URL}/sessions`, {
@@ -171,7 +154,6 @@ export const useChatStore = defineStore('chat', () => {
       return chat
     } catch (e) {
       console.error('创建会话失败:', e)
-      // 降级：本地创建
       const chat = {
         id: Date.now().toString(),
         sessionId: null,
@@ -190,20 +172,17 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
   
-  // 切换会话
   async function switchChat(id) {
     currentChatId.value = id
     currentExecutionStage.value = ''
     executionStatus.value = 'idle'
-    // 加载历史消息
+    clearStatus()
     await loadChatHistory(id)
   }
   
-  // 删除会话
   async function deleteChat(id) {
     const chat = chats.value.find(c => c.id === id)
     
-    // 调用后端删除接口
     if (chat?.sessionId) {
       try {
         await fetch(`${API_URL}/sessions/${chat.sessionId}`, { method: 'DELETE' })
@@ -212,7 +191,6 @@ export const useChatStore = defineStore('chat', () => {
       }
     }
     
-    // 本地删除
     const index = chats.value.findIndex(c => c.id === id)
     if (index > -1) {
       chats.value.splice(index, 1)
@@ -226,7 +204,6 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
   
-  // 添加消息
   function addMessage(chatId, message) {
     const chat = chats.value.find(c => c.id === chatId)
     if (chat) {
@@ -235,7 +212,6 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
   
-  // 更新消息
   function updateMessage(chatId, messageIndex, content) {
     const chat = chats.value.find(c => c.id === chatId)
     if (chat && chat.messages[messageIndex]) {
@@ -244,7 +220,6 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
   
-  // 追加消息内容（用于 SSE 流式更新）
   function appendMessageContent(chatId, messageIndex, content) {
     const chatIndex = chats.value.findIndex(c => c.id === chatId)
     if (chatIndex === -1) return
@@ -252,21 +227,18 @@ export const useChatStore = defineStore('chat', () => {
     const chat = chats.value[chatIndex]
     if (!chat.messages[messageIndex]) return
     
-    // 创建新的消息数组来触发响应式更新
     const newMessages = [...chat.messages]
     newMessages[messageIndex] = {
       ...newMessages[messageIndex],
       content: newMessages[messageIndex].content + content
     }
     
-    // 替换整个 chat 对象
     chats.value[chatIndex] = {
       ...chat,
       messages: newMessages
     }
   }
   
-  // 更新会话标题
   function updateChatTitle(chatId, title) {
     const chat = chats.value.find(c => c.id === chatId)
     if (chat) {
@@ -275,7 +247,6 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
   
-  // 更新 sessionId
   function updateSessionId(chatId, sessionId) {
     const chat = chats.value.find(c => c.id === chatId)
     if (chat && !chat.sessionId) {
@@ -284,57 +255,45 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
   
-  // 设置执行阶段
   function setExecutionStage(stage) {
     currentExecutionStage.value = stage
     if (stage) {
       executionStatus.value = 'processing'
-      // 更新进度
-      const stageInfo = workflowStages.value.find(s => s.id === stage)
-      if (stageInfo) {
-        currentProgress.value = stageInfo.progress || 0
-      }
     }
   }
   
-  // 设置工作流阶段
   function setWorkflowStages(stages) {
     workflowStages.value = stages
     currentProgress.value = 0
   }
   
-  // 设置加载状态
   function setLoading(status) {
     loading.value = status
     if (!status) {
       executionStatus.value = 'success'
       currentExecutionStage.value = 'completed'
+      clearStatus()
     }
   }
   
-  // 设置错误
   function setError(errorInfo) {
     error.value = errorInfo
     executionStatus.value = 'error'
   }
   
-  // 清除错误
   function clearError() {
     error.value = null
     executionStatus.value = 'idle'
   }
   
-  // 追加推理内容
   function appendThinking(content) {
     thinkingContent.value += content
   }
   
-  // 清空推理内容
   function clearThinking() {
     thinkingContent.value = ''
   }
   
-  // 保存到 localStorage
   function saveChats() {
     localStorage.setItem('chats', JSON.stringify(chats.value))
   }
@@ -345,6 +304,7 @@ export const useChatStore = defineStore('chat', () => {
     currentChatId,
     loading,
     error,
+    currentStatus,
     currentExecutionStage,
     executionStatus,
     workflowStages,
@@ -354,9 +314,10 @@ export const useChatStore = defineStore('chat', () => {
     // Computed
     currentChat,
     currentMessages,
-    currentExecutionStageText,
     
     // Actions
+    setCurrentStatus,
+    clearStatus,
     loadChats,
     loadChatHistory,
     refreshTitles,

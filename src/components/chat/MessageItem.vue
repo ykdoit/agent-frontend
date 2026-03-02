@@ -19,6 +19,12 @@
         </svg>
       </div>
       <div class="ai-content">
+        <!-- 状态条：工具调用过程 -->
+        <div v-if="currentStatus && loading" class="status-bar">
+          <div class="status-spinner"></div>
+          <span class="status-text">{{ currentStatus }}</span>
+        </div>
+        
         <!-- 加载动画 -->
         <div v-if="!message.content && loading" class="loading-dots">
           <span></span><span></span><span></span>
@@ -76,8 +82,9 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { parseStreamContent } from '@/composables/useWorkflow'
+import { useChatStore } from '@/stores/chat'
 import ConfirmationCard from '@/components/common/ConfirmationCard.vue'
 
 const props = defineProps({
@@ -92,10 +99,33 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['copy', 'retry', 'selectTime'])
+const chatStore = useChatStore()
 
 const copied = ref('')
 const timeSelected = ref('')
 const confirmationHandled = ref(false)
+
+// 订阅 Store 的状态
+const unsubscribe = ref(null)
+
+onMounted(() => {
+  // 订阅 currentStatus 变化
+  const store = chatStore.$patch ? chatStore : { $state: chatStore.$state }
+  if (store.$subscribe) {
+    unsubscribe.value = store.$subscribe((mutation, state) => {
+      console.log('🔄 状态更新:', state.currentStatus)
+    })
+  }
+})
+
+onUnmounted(() => {
+  if (unsubscribe.value) {
+    unsubscribe.value()
+  }
+})
+
+// 当前状态（从 Store 获取）
+const currentStatus = computed(() => chatStore.currentStatus)
 
 // 时间选项映射
 const timeOptions = computed(() => {
@@ -124,9 +154,7 @@ const parsed = computed(() => {
 // 处理确认操作
 function handleConfirmation(confirmed) {
   confirmationHandled.value = true
-  // 这里应该发送确认结果给后端
   console.log('用户确认结果:', confirmed)
-  // 可以通过事件通知父组件或其他方式处理
 }
 
 // 时间选择
@@ -135,21 +163,16 @@ function onTimeSelect(time) {
   emit('selectTime', time)
 }
 
-// 格式化最终内容（转义 HTML + 处理换行）
+// 格式化最终内容
 const formattedContent = computed(() => {
   let content = parsed.value.displayContent
   if (!content) return ''
 
-  // 转义 HTML
   content = content
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-
-  // 处理换行
   content = content.replace(/\n/g, '<br>')
-
-  // 清理多余空行
   content = content.replace(/<br>\s*<br>/g, '<br>')
   content = content.replace(/^<br>/, '')
   content = content.replace(/<br>$/g, '')
@@ -205,7 +228,7 @@ function retry() {
   border: 1px solid var(--accent);
   color: var(--text-primary);
   padding: 14px 20px;
-  border-radius: var(--radius-lg) var(--radius-lg) var(--radius-sm) var(--radius-lg);
+  border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) var(--radius-sm);
   font-size: 15px;
   line-height: 1.6;
   max-width: 70%;
@@ -246,14 +269,51 @@ function retry() {
   to { transform: rotate(360deg); }
 }
 
-@keyframes avatar-pulse {
-  0%, 100% { box-shadow: var(--shadow-glow); }
-  50% { box-shadow: 0 0 30px rgba(66, 133, 244, 0.4); }
-}
-
 .ai-content {
   flex: 1;
   padding-top: 8px;
+}
+
+/* 状态条 */
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  animation: status-in 0.2s ease-out;
+}
+
+@keyframes status-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.status-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border-color);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.status-text {
+  font-weight: 500;
 }
 
 .ai-text {
@@ -263,7 +323,7 @@ function retry() {
   white-space: pre-wrap;
 }
 
-/* 加载动画 - 骨架屏版 */
+/* 加载动画 */
 .loading-dots {
   display: flex;
   gap: 6px;
@@ -423,6 +483,11 @@ function retry() {
   .message-actions {
     opacity: 1;
     transform: translateY(0);
+  }
+  
+  .status-bar {
+    padding: 8px 12px;
+    font-size: 13px;
   }
 }
 </style>

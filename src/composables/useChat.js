@@ -6,6 +6,11 @@ import { resumeSession as apiResumeSession, getSessionState as apiGetSessionStat
 
 /**
  * 聊天 Composable
+ * 
+ * 职责：
+ * - 处理用户输入验证
+ * - 管理 SSE 连接
+ * - 分发后端事件到 Store
  */
 export function useChat() {
   const chatStore = useChatStore()
@@ -14,10 +19,12 @@ export function useChat() {
   const messagesRef = ref(null)
   const inputRef = ref(null)
   
-  // 当前 AI 消息索引
   let currentAiMsgIndex = -1
   let currentChatId = null
   
+  /**
+   * 验证用户输入
+   */
   function validateInput(text) {
     if (!text || text.trim().length === 0) {
       return { valid: false, error: '请输入有效内容' }
@@ -31,9 +38,11 @@ export function useChat() {
     return { valid: true }
   }
   
+  /**
+   * 滚动到底部
+   */
   function scrollToBottom() {
     nextTick(() => {
-      // 使用浏览器级别的滚动
       window.scrollTo({
         top: document.body.scrollHeight,
         behavior: 'smooth'
@@ -43,6 +52,11 @@ export function useChat() {
   
   /**
    * 处理 SSE 事件
+   * 
+   * 事件类型：
+   * - status: Agent 状态推送（思考中、工具调用）
+   * - message: AI 回复内容
+   * - OpenAI 格式: 兼容旧版
    */
   async function handleSSEEvent(json) {
     // 更新 sessionId
@@ -52,18 +66,21 @@ export function useChat() {
     
     const eventType = json.event
     
-    // 处理不同事件类型
     switch (eventType) {
+      // 状态推送：工具调用过程
+      case 'status':
+        console.log(`🔄 [${json.stage}] ${json.text}`)
+        chatStore.setCurrentStatus(json.text)
+        break
+        
       case 'workflow':
         if (json.stages && json.stages.length > 0) {
-          console.log('📊 Workflow stages:', json.stages)
           chatStore.setWorkflowStages(json.stages)
         }
         break
         
       case 'thought':
         if (json.stage_id) {
-          console.log(`💭 [${json.stage_id}] ${json.detail || ''}`)
           chatStore.setExecutionStage(json.stage_id)
           if (json.detail) {
             chatStore.appendThinking(json.detail + '\n')
@@ -71,36 +88,12 @@ export function useChat() {
         }
         break
         
-      case 'message':
-        const content = json.content
-        if (content) {
-          chatStore.appendMessageContent(currentChatId, currentAiMsgIndex, content)
-          scrollToBottom()
-        }
-        if (json.finished) {
-          chatStore.setExecutionStage('completed')
-        }
-        break
-        
-      case 'call':
-        console.log(`🔧 工具调用:`, json.tool_name || json)
-        break
-        
       case 'interaction':
         console.log(`✋ 交互请求:`, json)
-        chatStore.setInteractionRequest({
-          type: json.type,
-          step: json.step,
-          description: json.description,
-          template: json.template,
-          timestamp: Date.now()
-        })
         break
         
       case 'control':
-        if (json.state === 'waiting_for_input') {
-          chatStore.setLoading(false)
-        } else if (json.state === 'completed') {
+        if (json.state === 'waiting_for_input' || json.state === 'completed') {
           chatStore.setLoading(false)
         }
         if (json.error) {
@@ -110,7 +103,7 @@ export function useChat() {
         break
     }
     
-    // 兼容旧格式：OpenAI 风格
+    // 兼容 OpenAI 格式：消息内容
     if (!eventType && json.choices?.[0]?.delta?.content) {
       const content = json.choices[0].delta.content
       chatStore.appendMessageContent(currentChatId, currentAiMsgIndex, content)
@@ -139,12 +132,9 @@ export function useChat() {
       content: text
     })
     
-    // 更新标题（首条用户消息时）
+    // 更新标题
     if (chat.messages.filter(m => m.role === 'user').length === 1) {
-      const cleanTitle = text
-        .replace(/[\n\r]/g, ' ')  // 换行转空格
-        .replace(/\s+/g, ' ')       // 多空格合并
-        .trim()
+      const cleanTitle = text.replace(/[\n\r]/g, ' ').replace(/\s+/g, ' ').trim()
       chatStore.updateChatTitle(chat.id, cleanTitle.slice(0, 20) + (cleanTitle.length > 20 ? '...' : ''))
     }
     
@@ -152,6 +142,7 @@ export function useChat() {
     chatStore.setLoading(true)
     chatStore.clearError()
     chatStore.clearThinking()
+    chatStore.clearStatus()
     
     // 添加空的 AI 消息
     chatStore.addMessage(chat.id, {
@@ -175,14 +166,13 @@ export function useChat() {
       (error) => {
         chatStore.appendMessageContent(currentChatId, currentAiMsgIndex, '抱歉，发生了网络错误，请稍后重试。')
         chatStore.setError(error)
+        chatStore.clearStatus()
       },
       () => {
         chatStore.setLoading(false)
+        chatStore.clearStatus()
         scrollToBottom()
-        // 延迟刷新标题，获取 AI 生成的新标题
-        setTimeout(() => {
-          chatStore.refreshTitles()
-        }, 3000)
+        setTimeout(() => chatStore.refreshTitles(), 3000)
       }
     )
   }
