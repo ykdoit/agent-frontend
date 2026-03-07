@@ -5,7 +5,7 @@
         v-for="msg in messages"
         :key="msg.id"
         :message="msg"
-        :loading="loading && msg.id === messages[messages.length - 1]?.id && !msg.content"
+        :loading="loading && msg.id === messages[messages.length - 1]?.id"
         @retry="retryMessage"
         @select-time="onSelectTime"
       />

@@ -7,7 +7,7 @@
 
     <!-- AI 消息 -->
     <div v-else class="ai-message">
-      <div class="ai-avatar" :class="{ spinning: loading && !message.content }">
+      <div class="ai-avatar" :class="{ spinning: loading }">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
           <path
             d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
@@ -19,19 +19,14 @@
         </svg>
       </div>
       <div class="ai-content">
-        <!-- 状态条：工具调用过程 -->
-        <div v-if="currentStatus && loading" class="status-bar">
-          <div class="status-spinner"></div>
-          <span class="status-text">{{ currentStatus }}</span>
-        </div>
-        
-        <!-- 加载动画 -->
-        <div v-if="!message.content && loading" class="loading-dots">
-          <span></span><span></span><span></span>
+        <!-- 状态条：loading期间显示在消息顶部 -->
+        <div v-if="loading" class="status-bar">
+          <div class="status-indicator"></div>
+          <span class="status-text">{{ chatStore.currentStatus || '💭 思考中...' }}</span>
         </div>
 
-        <!-- 消息内容 -->
-        <template v-else>
+        <!-- 消息内容：流式输出 -->
+        <template v-if="message.content">
           <!-- 确认卡片 -->
           <ConfirmationCard
             v-if="parsed.confirmationCard && !confirmationHandled"
@@ -40,7 +35,7 @@
             @cancel="handleConfirmation(false)"
           />
 
-          <!-- 最终内容 -->
+          <!-- 文本内容 -->
           <div class="ai-text" v-html="formattedContent"></div>
 
           <!-- 时间选择器 -->
@@ -59,7 +54,7 @@
           </div>
 
           <!-- 操作按钮 -->
-          <div v-if="message.content && !message.isWelcome" class="message-actions">
+          <div v-if="!message.isWelcome" class="message-actions">
             <button class="action-btn" @click="copyContent" :title="copied ? '已复制' : '复制'">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
@@ -76,13 +71,18 @@
             </button>
           </div>
         </template>
+
+        <!-- 加载圆点：固定在底部，loading期间显示 -->
+        <div v-if="loading" class="loading-dots">
+          <span></span><span></span><span></span>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed } from 'vue'
 import { parseStreamContent } from '@/composables/useWorkflow'
 import { useChatStore } from '@/stores/chat'
 import ConfirmationCard from '@/components/common/ConfirmationCard.vue'
@@ -104,28 +104,6 @@ const chatStore = useChatStore()
 const copied = ref('')
 const timeSelected = ref('')
 const confirmationHandled = ref(false)
-
-// 订阅 Store 的状态
-const unsubscribe = ref(null)
-
-onMounted(() => {
-  // 订阅 currentStatus 变化
-  const store = chatStore.$patch ? chatStore : { $state: chatStore.$state }
-  if (store.$subscribe) {
-    unsubscribe.value = store.$subscribe((mutation, state) => {
-      console.log('🔄 状态更新:', state.currentStatus)
-    })
-  }
-})
-
-onUnmounted(() => {
-  if (unsubscribe.value) {
-    unsubscribe.value()
-  }
-})
-
-// 当前状态（从 Store 获取）
-const currentStatus = computed(() => chatStore.currentStatus)
 
 // 时间选项映射
 const timeOptions = computed(() => {
@@ -274,46 +252,61 @@ function retry() {
   padding-top: 8px;
 }
 
-/* 状态条 */
+/* 状态条 - 高级设计 */
 .status-bar {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  background: var(--bg-secondary);
-  border-radius: 8px;
-  margin-bottom: 12px;
+  gap: 10px;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, rgba(66, 133, 244, 0.08) 0%, rgba(52, 168, 83, 0.08) 100%);
+  border: 1px solid rgba(66, 133, 244, 0.15);
+  border-radius: 20px;
+  margin-bottom: 14px;
   font-size: 14px;
   color: var(--text-secondary);
-  animation: status-in 0.2s ease-out;
+  position: relative;
+  overflow: hidden;
 }
 
-@keyframes status-in {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.status-bar::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+  animation: shimmer 2s infinite;
 }
 
-.status-spinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid var(--border-color);
-  border-top-color: var(--accent);
+@keyframes shimmer {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+.status-indicator {
+  width: 6px;
+  height: 6px;
+  background: var(--accent);
   border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+  animation: pulse 1.5s ease-in-out infinite;
+  box-shadow: 0 0 8px var(--accent);
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.8);
+  }
 }
 
 .status-text {
   font-weight: 500;
+  letter-spacing: 0.3px;
 }
 
 .ai-text {

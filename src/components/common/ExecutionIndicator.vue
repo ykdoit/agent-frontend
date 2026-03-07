@@ -123,13 +123,13 @@ watch(() => props.status, (newStatus) => {
 }
 
 .status-success {
-  border-color: #4caf50;
-  color: #4caf50;
+  border-color: var(--success);
+  color: var(--success);
 }
 
 .status-error {
-  border-color: #f44336;
-  color: #f44336;
+  border-color: var(--error);
+  color: var(--error);
 }
 
 .stage-text {

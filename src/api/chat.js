@@ -1,79 +1,41 @@
 /**
- * 聊天相关 API
+ * 聊天 API
+ * 
+ * 职责：
+ * - 聊天消息相关操作
+ * - 会话恢复
  */
-import { getApiURL } from './config'
+
+import { get, post, getFullUrl } from './request'
 
 /**
- * 恢复挂起的会话
+ * 聊天 API
  */
-export async function resumeSession(sessionId, response) {
-  try {
-    const res = await fetch(getApiURL(`/sessions/${sessionId}/resume`), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ response })
-    })
-    return await res.json()
-  } catch (error) {
-    console.error('恢复会话失败:', error)
-    return { success: false, error: error.message }
-  }
-}
+export const chatApi = {
+  /**
+   * 恢复挂起的会话
+   * @param {string} sessionId - 会话 ID
+   * @param {string} response - 用户响应
+   * @returns {Promise<Object>}
+   */
+  resumeSession(sessionId, response) {
+    return post(`/sessions/${sessionId}/resume`, { response })
+  },
 
-/**
- * 获取会话状态
- */
-export async function getSessionState(sessionId) {
-  try {
-    const res = await fetch(getApiURL(`/sessions/${sessionId}/state`))
-    return await res.json()
-  } catch (error) {
-    console.error('获取会话状态失败:', error)
-    return { error: error.message }
-  }
-}
+  /**
+   * 获取会话状态
+   * @param {string} sessionId - 会话 ID
+   * @returns {Promise<Object>}
+   */
+  getSessionState(sessionId) {
+    return get(`/sessions/${sessionId}/state`)
+  },
 
-/**
- * 获取会话列表
- */
-export async function getSessions() {
-  try {
-    const res = await fetch(getApiURL('/sessions'))
-    return await res.json()
-  } catch (error) {
-    console.error('获取会话列表失败:', error)
-    return []
-  }
-}
-
-/**
- * 创建新会话
- */
-export async function createSession(sessionId) {
-  try {
-    const res = await fetch(getApiURL('/sessions'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: sessionId })
-    })
-    return await res.json()
-  } catch (error) {
-    console.error('创建会话失败:', error)
-    return { error: error.message }
-  }
-}
-
-/**
- * 删除会话
- */
-export async function deleteSession(sessionId) {
-  try {
-    const res = await fetch(getApiURL(`/sessions/${sessionId}`), {
-      method: 'DELETE'
-    })
-    return await res.json()
-  } catch (error) {
-    console.error('删除会话失败:', error)
-    return { error: error.message }
-  }
+  /**
+   * 获取聊天完成 API 的完整 URL（用于 SSE）
+   * @returns {string}
+   */
+  getChatCompletionsUrl() {
+    return getFullUrl('/v1/chat/completions')
+  },
 }

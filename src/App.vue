@@ -2,29 +2,21 @@
   <div class="app" :class="currentTheme">
     <!-- 侧边栏 -->
     <Sidebar />
-    
+
     <!-- 主区域 -->
     <main class="main">
       <div class="main-layout">
         <!-- 对话区域 -->
         <div class="chat-area">
-          <!-- 顶部标题栏 -->
-          <header class="chat-header">
-            <h1 class="chat-title">{{ currentChatTitle }}</h1>
-          </header>
-          
-          <!-- 消息区 -->
-          <MessageList
-            ref="messageListRef"
-            :messages="chatStore.currentMessages"
-            :loading="chatStore.loading"
-            :loading-text="chatStore.currentExecutionStageText"
-            @retry="retryMessage"
-            @select-time="onSelectTime"
-          />
-          
+          <!-- 路由视图 -->
+          <router-view v-slot="{ Component }">
+            <keep-alive>
+              <component :is="Component" @select="handleSuggestion" />
+            </keep-alive>
+          </router-view>
+
           <!-- 输入区 -->
-          <ChatInput 
+          <ChatInput
             v-model="chat.inputText.value"
             :loading="chatStore.loading"
             @send="handleSend"
@@ -32,7 +24,7 @@
         </div>
       </div>
     </main>
-    
+
     <!-- 错误提示 -->
     <div v-if="chatStore.error" class="error-toast">
       <span>{{ chatStore.error }}</span>
@@ -42,48 +34,87 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch, computed } from 'vue'
+import { onMounted, watch, ref } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useChatStore } from '@/stores/chat'
+import { useSessionStore } from '@/stores/session'
 import { useChat } from '@/composables/useChat'
 import { useTheme } from '@/composables/useTheme'
-import { Sidebar, MessageList, ChatInput } from '@/components/chat'
+import { Sidebar, ChatInput } from '@/components/chat'
 
+const router = useRouter()
+const route = useRoute()
 const chatStore = useChatStore()
+const sessionStore = useSessionStore()
+const chat = useChat()
 const { theme, loadTheme } = useTheme()
-
-// 确保 theme 是响应式的
 const currentTheme = theme
 
-const messageListRef = ref(null)
-const chat = useChat()
-
-// 当前对话标题
-const currentChatTitle = computed(() => {
-  return chatStore.currentChat?.title || '新对话'
-})
-
-// 当 messageListRef 变化时，更新 chat 的 messagesRef
-watch(messageListRef, (newRef) => {
-  if (newRef) {
-    chat.messagesRef = newRef
-  }
-})
+// 待发送的消息（用于首页创建会话后发送）
+const pendingMessage = ref('')
 
 onMounted(async () => {
   loadTheme()
-  await chatStore.loadChats()
+  await sessionStore.loadSessions()
 })
 
-function handleSend(text) {
+/**
+ * 监听路由变化，切换会话并加载历史
+ */
+watch(() => route.params.id, async (newId) => {
+  if (newId) {
+    // 设置当前会话
+    sessionStore.switchSession(newId)
+    // 加载历史消息
+    const session = sessionStore.sessions.find(s => s.id === newId)
+    if (session?.sessionId) {
+      await chatStore.loadHistory(session.sessionId)
+    }
+    
+    // 如果有待发送的消息，发送它
+    if (pendingMessage.value) {
+      chat.inputText.value = pendingMessage.value
+      pendingMessage.value = ''
+      chat.sendMessage()
+    }
+  } else {
+    // 首页，清空当前会话
+    sessionStore.switchSession(null)
+  }
+}, { immediate: true })
+
+/**
+ * 处理发送消息
+ */
+async function handleSend() {
+  const text = chat.inputText.value.trim()
+  if (!text) return
+  
+  // 如果没有当前会话，先创建一个
+  if (!sessionStore.currentSession) {
+    pendingMessage.value = text
+    chat.inputText.value = ''
+    const newSession = await sessionStore.createSession()
+    router.push({ name: 'chat', params: { id: newSession.id } })
+    return
+  }
   chat.sendMessage()
 }
 
-function retryMessage(msg) {
-  chat.retryMessage(msg)
-}
-
-function onSelectTime(time) {
-  chat.sendMessageWithText(time)
+/**
+ * 处理选择建议
+ */
+async function handleSuggestion(suggestion) {
+  // 如果没有当前会话，先创建一个
+  if (!sessionStore.currentSession) {
+    pendingMessage.value = suggestion
+    const newSession = await sessionStore.createSession()
+    router.push({ name: 'chat', params: { id: newSession.id } })
+    return
+  }
+  // 使用建议文本发送消息
+  chat.inputText.value = suggestion
+  chat.sendMessage()
 }
 </script>
 
@@ -97,22 +128,22 @@ function onSelectTime(time) {
   --bg-tertiary: #2d2d2d;
   --bg-hover: #3d3d3d;
   --bg-elevated: #252526;
-  
+
   /* 边框与分割线 */
   --border-color: #2d2d2d;
   --border-subtle: #3d3d3d;
-  
+
   /* 文字色 */
   --text-primary: #e3e3e3;
   --text-secondary: #c4c4c4;
   --text-muted: #8e8e8e;
-  
+
   /* 主题色 */
   --accent: #4285f4;
   --accent-hover: #5a9bff;
   --accent-light: rgba(66, 133, 244, 0.15);
   --accent-gradient: linear-gradient(135deg, #4285f4, #34a853);
-  
+
   /* 语义色 */
   --success: #34a853;
   --success-light: rgba(52, 168, 83, 0.15);
@@ -122,19 +153,19 @@ function onSelectTime(time) {
   --error-light: rgba(234, 67, 53, 0.15);
   --info: #4285f4;
   --info-light: rgba(66, 133, 244, 0.15);
-  
+
   /* 阴影 */
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.2);
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.3);
   --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.4);
   --shadow-glow: 0 0 20px rgba(66, 133, 244, 0.3);
-  
+
   /* 圆角 */
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 20px;
   --radius-full: 9999px;
-  
+
   /* 过渡 */
   --transition-fast: 0.15s ease;
   --transition-normal: 0.25s ease;
@@ -168,9 +199,9 @@ function onSelectTime(time) {
   --shadow-glow: 0 0 20px rgba(26, 115, 232, 0.2);
 }
 
-body { 
-  font-family: 'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
-  background: var(--bg-primary); 
+body {
+  font-family: 'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg-primary);
   color: var(--text-primary);
   transition: background var(--transition-normal), color var(--transition-normal);
   font-size: 15px;
@@ -179,72 +210,48 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* 全局波纹效果 */
-.ripple {
-  position: relative;
-  overflow: hidden;
+/* 滚动条样式 - 自动适配深色/浅色主题 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
 }
 
-.ripple::after {
-  content: '';
-  position: absolute;
-  border-radius: 50%;
-  background: currentColor;
-  opacity: 0;
-  transform: scale(0);
-  pointer-events: none;
+::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  transition: background var(--transition-normal);
 }
 
-.ripple:active::after {
-  animation: ripple-effect 0.6s ease-out;
+::-webkit-scrollbar-thumb {
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  transition: background var(--transition-normal);
 }
 
-@keyframes ripple-effect {
-  0% {
-    opacity: 0.3;
-    transform: scale(0);
-  }
-  100% {
-    opacity: 0;
-    transform: scale(2.5);
-  }
+::-webkit-scrollbar-thumb:hover {
+  background: var(--bg-hover);
 }
 
-/* Focus visible 全局样式 */
-:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+::-webkit-scrollbar-corner {
+  background: var(--bg-secondary);
 }
 
-button:focus:not(:focus-visible) {
-  outline: none;
-}
-
-/* 骨架屏动画 */
-@keyframes skeleton-loading {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
-}
-
-.skeleton {
-  background: linear-gradient(90deg, var(--bg-tertiary) 25%, var(--bg-hover) 50%, var(--bg-tertiary) 75%);
-  background-size: 200% 100%;
-  animation: skeleton-loading 1.5s infinite;
-  border-radius: var(--radius-sm);
+/* Firefox 滚动条 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--bg-tertiary) var(--bg-secondary);
 }
 
 .app { display: flex; min-height: 100vh; }
 
-/* 主区域 */
-.main { 
-  flex: 1; 
-  display: flex; 
-  flex-direction: column; 
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   background: var(--bg-primary);
   transition: background 0.25s ease;
 }
 
-/* 主布局 */
 .main-layout {
   display: flex;
   flex: 1;
@@ -258,26 +265,6 @@ button:focus:not(:focus-visible) {
   max-width: 900px;
   margin: 0 auto;
   width: 100%;
-}
-
-/* 标题栏 */
-.chat-header {
-  padding: 16px 24px;
-  text-align: center;
-  background: var(--bg-primary);
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
-
-.chat-header .chat-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* 错误提示 */
@@ -328,10 +315,6 @@ button:focus:not(:focus-visible) {
 @media (max-width: 768px) {
   .chat-area {
     max-width: 100%;
-  }
-  
-  .header {
-    padding: 10px 16px;
   }
 }
 </style>

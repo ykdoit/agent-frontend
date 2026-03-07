@@ -11,6 +11,20 @@
           ref="inputRef"
         ></textarea>
         <div class="input-actions">
+          <!-- 清空按钮 -->
+          <button 
+            v-if="localInputText.trim()"
+            class="action-btn clear-btn"
+            title="清空输入"
+            @click="clearInput"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+          
+          <!-- 上传文件按钮 -->
           <button class="action-btn" title="上传文件">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
@@ -68,6 +82,11 @@ function sendMessage() {
   if (!localInputText.value.trim() || props.loading) return
   emit('send', localInputText.value)
   localInputText.value = ''
+}
+
+function clearInput() {
+  localInputText.value = ''
+  inputRef.value?.focus()
 }
 </script>
 
@@ -161,6 +180,26 @@ function sendMessage() {
 
 .action-btn:active::before {
   opacity: 0.15;
+}
+
+/* 清空按钮动画 */
+.clear-btn {
+  animation: fade-in 0.2s ease;
+}
+
+.clear-btn:hover {
+  color: var(--error);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .send-btn {

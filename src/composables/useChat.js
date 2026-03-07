@@ -1,8 +1,7 @@
-import { ref, nextTick } from 'vue'
+import { ref, computed, nextTick } from 'vue'
 import { useChatStore } from '@/stores/chat'
-import { getApiURL } from '@/api/config'
-import { SSEConnectionManager } from '@/api/sse'
-import { resumeSession as apiResumeSession, getSessionState as apiGetSessionState } from '@/api/chat'
+import { useSessionStore } from '@/stores/session'
+import { chatApi, SSEConnectionManager } from '@/api'
 
 /**
  * 聊天 Composable
@@ -14,13 +13,26 @@ import { resumeSession as apiResumeSession, getSessionState as apiGetSessionStat
  */
 export function useChat() {
   const chatStore = useChatStore()
+  const sessionStore = useSessionStore()
   const connectionManager = new SSEConnectionManager()
   const inputText = ref('')
-  const messagesRef = ref(null)
-  const inputRef = ref(null)
   
   let currentAiMsgIndex = -1
-  let currentChatId = null
+  let currentSessionId = null
+
+  /**
+   * 当前会话的消息列表
+   */
+  const currentMessages = computed(() => {
+    const sessionId = sessionStore.currentSessionId
+    if (!sessionId) return []
+    return chatStore.getMessages(sessionId)
+  })
+  
+  /**
+   * 当前会话
+   */
+  const currentSession = computed(() => sessionStore.currentSession)
   
   /**
    * 验证用户输入
@@ -52,22 +64,16 @@ export function useChat() {
   
   /**
    * 处理 SSE 事件
-   * 
-   * 事件类型：
-   * - status: Agent 状态推送（思考中、工具调用）
-   * - message: AI 回复内容
-   * - OpenAI 格式: 兼容旧版
    */
   async function handleSSEEvent(json) {
     // 更新 sessionId
-    if (json.session_id) {
-      chatStore.updateSessionId(currentChatId, json.session_id)
+    if (json.session_id && currentSessionId) {
+      sessionStore.updateSessionId(currentSessionId, json.session_id)
     }
     
     const eventType = json.event
     
     switch (eventType) {
-      // 状态推送：工具调用过程
       case 'status':
         console.log(`🔄 [${json.stage}] ${json.text}`)
         chatStore.setCurrentStatus(json.text)
@@ -98,15 +104,15 @@ export function useChat() {
         }
         if (json.error) {
           console.error('❌ Error:', json.error)
-          chatStore.appendMessageContent(currentChatId, currentAiMsgIndex, `\n\n[错误: ${json.error}]`)
+          chatStore.appendMessageContent(currentSessionId, currentAiMsgIndex, `\n\n[错误: ${json.error}]`)
         }
         break
     }
     
-    // 兼容 OpenAI 格式：消息内容
+    // 兼容 OpenAI 格式
     if (!eventType && json.choices?.[0]?.delta?.content) {
       const content = json.choices[0].delta.content
-      chatStore.appendMessageContent(currentChatId, currentAiMsgIndex, content)
+      chatStore.appendMessageContent(currentSessionId, currentAiMsgIndex, content)
       scrollToBottom()
     }
   }
@@ -119,23 +125,24 @@ export function useChat() {
     const validation = validateInput(text)
     if (!validation.valid || chatStore.loading) return
     
-    const chat = chatStore.currentChat
-    if (!chat) return
+    const session = sessionStore.currentSession
+    if (!session) return
     
-    currentChatId = chat.id
+    currentSessionId = session.id
     inputText.value = ''
     
     // 添加用户消息
-    chatStore.addMessage(chat.id, {
+    chatStore.addMessage(session.id, {
       id: Date.now().toString(),
       role: 'user',
       content: text
     })
     
-    // 更新标题
-    if (chat.messages.filter(m => m.role === 'user').length === 1) {
+    // 更新标题（首次发送）
+    const messages = chatStore.getMessages(session.id)
+    if (messages.filter(m => m.role === 'user').length === 1) {
       const cleanTitle = text.replace(/[\n\r]/g, ' ').replace(/\s+/g, ' ').trim()
-      chatStore.updateChatTitle(chat.id, cleanTitle.slice(0, 20) + (cleanTitle.length > 20 ? '...' : ''))
+      sessionStore.renameSession(session.id, cleanTitle.slice(0, 20) + (cleanTitle.length > 20 ? '...' : ''))
     }
     
     scrollToBottom()
@@ -145,26 +152,26 @@ export function useChat() {
     chatStore.clearStatus()
     
     // 添加空的 AI 消息
-    chatStore.addMessage(chat.id, {
+    chatStore.addMessage(session.id, {
       id: 'ai-' + Date.now(),
       role: 'assistant',
       content: ''
     })
     
-    currentAiMsgIndex = chatStore.currentMessages.length - 1
+    currentAiMsgIndex = chatStore.getMessages(session.id).length - 1
     
     // 建立 SSE 连接
     await connectionManager.connect(
-      getApiURL('/v1/chat/completions'),
+      chatApi.getChatCompletionsUrl(),
       {
         model: 'Pro/zai-org/GLM-4.7',
         message: text,
-        session_id: chat.sessionId,
+        session_id: session.sessionId,
         stream: true
       },
       handleSSEEvent,
       (error) => {
-        chatStore.appendMessageContent(currentChatId, currentAiMsgIndex, '抱歉，发生了网络错误，请稍后重试。')
+        chatStore.appendMessageContent(currentSessionId, currentAiMsgIndex, '抱歉，发生了网络错误，请稍后重试。')
         chatStore.setError(error)
         chatStore.clearStatus()
       },
@@ -172,48 +179,66 @@ export function useChat() {
         chatStore.setLoading(false)
         chatStore.clearStatus()
         scrollToBottom()
-        setTimeout(() => chatStore.refreshTitles(), 3000)
+        setTimeout(() => sessionStore.refreshTitles(), 3000)
       }
     )
   }
   
+  /**
+   * 重试消息
+   */
   async function retryMessage(msg) {
-    const chat = chatStore.currentChat
-    if (!chat || chatStore.loading) return
+    const sessionId = sessionStore.currentSessionId
+    if (!sessionId || chatStore.loading) return
     
-    const msgIndex = chat.messages.findIndex(m => m.id === msg.id)
+    const messages = chatStore.getMessages(sessionId)
+    const msgIndex = messages.findIndex(m => m.id === msg.id)
     if (msgIndex <= 0) return
     
-    const userMsg = chat.messages[msgIndex - 1]
+    const userMsg = messages[msgIndex - 1]
     if (userMsg.role !== 'user') return
     
-    chat.messages.splice(msgIndex, 1)
+    // 移除 AI 消息
+    messages.splice(msgIndex, 1)
     inputText.value = userMsg.content
     await sendMessage()
   }
   
+  /**
+   * 使用指定文本发送消息
+   */
   async function sendMessageWithText(text) {
     inputText.value = text
     await sendMessage()
   }
   
+  /**
+   * 断开连接
+   */
   function disconnect() {
     connectionManager.disconnect()
   }
   
+  /**
+   * 恢复会话
+   */
   async function resumeSession(sessionId, response) {
-    return await apiResumeSession(sessionId, response)
+    return await chatApi.resumeSession(sessionId, response)
   }
   
+  /**
+   * 获取会话状态
+   */
   async function getSessionState(sessionId) {
-    return await apiGetSessionState(sessionId)
+    return await chatApi.getSessionState(sessionId)
   }
   
   return {
     inputText,
-    messagesRef,
-    inputRef,
+    currentMessages,
+    currentSession,
     chatStore,
+    sessionStore,
     sendMessage,
     retryMessage,
     sendMessageWithText,

@@ -52,9 +52,9 @@ const showLoading = computed(() => {
 
 /* 正在思考中 - 动画效果 */
 .thinking-active {
-  background: rgba(96, 165, 250, 0.08);
-  border: 1px solid rgba(96, 165, 250, 0.2);
-  border-left: 3px solid #3b82f6;
+  background: var(--info-light);
+  border: 1px solid rgba(66, 133, 244, 0.2);
+  border-left: 3px solid var(--info);
   border-radius: 12px;
   padding: 12px 16px;
 }
@@ -82,7 +82,7 @@ const showLoading = computed(() => {
 .thinking-title {
   font-size: 13px;
   font-weight: 500;
-  color: #3b82f6;
+  color: var(--info);
 }
 
 .thinking-animation {
@@ -94,7 +94,7 @@ const showLoading = computed(() => {
 .thinking-animation .dot {
   width: 6px;
   height: 6px;
-  background: #3b82f6;
+  background: var(--info);
   border-radius: 50%;
   animation: bounce 1.4s infinite ease-in-out;
 }
@@ -110,9 +110,9 @@ const showLoading = computed(() => {
 
 /* 思考完成 - 折叠块 */
 .thinking-block {
-  background: rgba(96, 165, 250, 0.05);
-  border: 1px solid var(--border-color, #2d2d2d);
-  border-left: 3px solid #60a5fa;
+  background: var(--info-light);
+  border: 1px solid var(--border-color);
+  border-left: 3px solid var(--info);
   border-radius: 12px;
   overflow: hidden;
 }
@@ -133,12 +133,12 @@ const showLoading = computed(() => {
 }
 
 .thinking-summary:hover {
-  background: rgba(96, 165, 250, 0.1);
+  background: var(--bg-hover);
 }
 
 .thinking-arrow {
   font-size: 10px;
-  color: var(--text-muted, #8e8e8e);
+  color: var(--text-muted);
   transition: transform 0.2s ease;
 }
 
@@ -150,9 +150,9 @@ const showLoading = computed(() => {
   padding: 12px 16px;
   font-size: 13px;
   line-height: 1.6;
-  color: var(--text-muted, #8e8e8e);
+  color: var(--text-muted);
   white-space: pre-wrap;
-  border-top: 1px solid var(--border-color, #2d2d2d);
-  background: var(--bg-tertiary, #2d2d2d);
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
 }
 </style>

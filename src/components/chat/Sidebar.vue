@@ -8,7 +8,7 @@
           <line x1="3" y1="18" x2="21" y2="18"></line>
         </svg>
       </button>
-      <span v-if="!sidebarCollapsed" class="brand">智能办公助手</span>
+      <span v-if="!sidebarCollapsed" class="brand" @click="goHome">智能办公助手</span>
     </div>
     
     <button class="new-chat-btn" @click="newChat">
@@ -20,19 +20,46 @@
     </button>
     
     <div class="chat-list" v-if="!sidebarCollapsed">
-      <div class="chat-section-title">对话</div>
-      <div 
-        v-for="chat in chats" 
-        :key="chat.id"
-        :class="['chat-item', { active: chat.id === currentChatId }]"
-        @click="switchChat(chat.id)"
+      <div class="chat-section-title">对话历史</div>
+      <div
+        v-for="session in sessions"
+        :key="session.id"
+        :class="['chat-item', { active: session.id === currentSessionId, pinned: session.pinned }]"
+        @click="switchChat(session.id)"
       >
-        <span class="chat-title">{{ chat.title }}</span>
-        <button class="delete-btn" @click.stop="deleteChat(chat.id)">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-          </svg>
-        </button>
+        <span class="pin-icon" v-if="session.pinned">📌</span>
+        <span class="chat-title" v-if="editingChatId !== session.id">{{ session.title }}</span>
+        <input
+          v-else
+          v-model="editingTitle"
+          class="rename-input"
+          @click.stop
+          @blur="finishRename(session.id)"
+          @keydown.enter="finishRename(session.id)"
+          @keydown.escape="cancelRename"
+          ref="renameInput"
+        />
+        <div class="chat-actions" v-if="editingChatId !== session.id">
+          <button class="action-btn" title="置顶" @click.stop="togglePin(session.id)">
+            <svg v-if="!session.pinned" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2v8m0 0l4-4m-4 4l-4-4m4 18v-6m0 0l4 4m-4-4l-4 4"/>
+            </svg>
+            <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2">
+              <path d="M12 2v8m0 0l4-4m-4 4l-4-4m4 18v-6m0 0l4 4m-4-4l-4 4"/>
+            </svg>
+          </button>
+          <button class="action-btn" title="重命名" @click.stop="startRename(session.id, session.title)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+            </svg>
+          </button>
+          <button class="action-btn delete" title="删除" @click.stop="deleteChat(session.id)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -60,29 +87,76 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
-import { useChatStore } from '@/stores/chat'
+import { ref, computed, nextTick } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { useSessionStore } from '@/stores/session'
 import { useTheme } from '@/composables/useTheme'
 
-const chatStore = useChatStore()
+const router = useRouter()
+const route = useRoute()
+const sessionStore = useSessionStore()
 const { theme, toggleTheme, getThemeLabel } = useTheme()
 
 const sidebarCollapsed = ref(false)
+const editingChatId = ref(null)
+const editingTitle = ref('')
+const renameInput = ref(null)
 
-const chats = computed(() => chatStore.chats)
-const currentChatId = computed(() => chatStore.currentChatId)
+const sessions = computed(() => sessionStore.sessions)
+const currentSessionId = computed(() => sessionStore.currentSessionId)
 const themeLabel = computed(() => getThemeLabel())
 
-async function newChat() {
-  await chatStore.createChat()
+function goHome() {
+  router.push({ name: 'home' })
 }
 
-async function switchChat(id) {
-  await chatStore.switchChat(id)
+async function newChat() {
+  const newSession = await sessionStore.createSession()
+  router.push({ name: 'chat', params: { id: newSession.id } })
+}
+
+function switchChat(id) {
+  router.push({ name: 'chat', params: { id } })
 }
 
 async function deleteChat(id) {
-  await chatStore.deleteChat(id)
+  const wasCurrentSession = route.params.id === id
+  await sessionStore.deleteSession(id)
+  
+  // 如果删除的是当前会话，导航到首页或下一个会话
+  if (wasCurrentSession) {
+    if (sessionStore.sessions.length > 0) {
+      router.replace({ name: 'chat', params: { id: sessionStore.sessions[0].id } })
+    } else {
+      router.replace({ name: 'home' })
+    }
+  }
+}
+
+async function togglePin(id) {
+  await sessionStore.togglePinSession(id)
+}
+
+function startRename(chatId, currentTitle) {
+  editingChatId.value = chatId
+  editingTitle.value = currentTitle
+  nextTick(() => {
+    renameInput.value?.focus()
+    renameInput.value?.select()
+  })
+}
+
+async function finishRename(chatId) {
+  if (editingTitle.value.trim() && editingTitle.value !== sessions.value.find(s => s.id === chatId)?.title) {
+    await sessionStore.renameSession(chatId, editingTitle.value.trim())
+  }
+  editingChatId.value = null
+  editingTitle.value = ''
+}
+
+function cancelRename() {
+  editingChatId.value = null
+  editingTitle.value = ''
 }
 </script>
 
@@ -175,6 +249,12 @@ async function deleteChat(id) {
   -webkit-text-fill-color: transparent;
   background-clip: text;
   transition: opacity var(--transition-normal);
+  cursor: pointer;
+  user-select: none;
+}
+
+.brand:hover {
+  opacity: 0.8;
 }
 
 .new-chat-btn {
@@ -215,7 +295,7 @@ async function deleteChat(id) {
 }
 
 .chat-section-title {
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text-muted);
   padding: 12px 12px 8px;
@@ -231,7 +311,7 @@ async function deleteChat(id) {
   font-size: 14px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   color: var(--text-secondary);
   transition: all var(--transition-fast);
   position: relative;
@@ -251,7 +331,7 @@ async function deleteChat(id) {
   transition: height var(--transition-fast);
 }
 
-.chat-item:hover { 
+.chat-item:hover {
   background: var(--bg-tertiary);
   color: var(--text-primary);
 }
@@ -260,8 +340,8 @@ async function deleteChat(id) {
   height: 20px;
 }
 
-.chat-item.active { 
-  background: var(--accent-light); 
+.chat-item.active {
+  background: var(--accent-light);
   color: var(--accent);
 }
 
@@ -270,33 +350,69 @@ async function deleteChat(id) {
   background: var(--accent);
 }
 
-.chat-title { 
-  flex: 1; 
-  overflow: hidden; 
-  text-overflow: ellipsis; 
-  white-space: nowrap;
-  font-weight: 500;
-  font-size: 15px;
+.chat-item.pinned {
+  background: rgba(251, 188, 4, 0.08);
 }
 
-.delete-btn {
+.chat-item.pinned:hover {
+  background: rgba(251, 188, 4, 0.12);
+}
+
+.pin-icon {
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.chat-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.rename-input {
+  flex: 1;
+  background: var(--bg-primary);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 14px;
+  color: var(--text-primary);
+  outline: none;
+}
+
+.chat-actions {
+  display: flex;
+  gap: 2px;
   opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.chat-item:hover .chat-actions {
+  opacity: 1;
+}
+
+.action-btn {
   background: none;
   border: none;
   color: var(--text-muted);
   cursor: pointer;
-  padding: 6px;
-  border-radius: var(--radius-sm);
+  padding: 4px;
+  border-radius: 4px;
   transition: all var(--transition-fast);
-  transform: scale(0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.chat-item:hover .delete-btn { 
-  opacity: 1;
-  transform: scale(1);
+.action-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
-.delete-btn:hover { 
+.action-btn.delete:hover {
   color: var(--error);
   background: var(--error-light);
 }
