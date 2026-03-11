@@ -113,16 +113,16 @@ export const useSessionStore = defineStore('session', () => {
       return newSession
     } catch (e) {
       console.error('创建会话失败:', e)
-
-      // 离线模式
+      const tempId = `local-${Date.now()}`
       const newSession = {
-        id: Date.now().toString(),
-        sessionId: null,
+        id: tempId,
+        sessionId: tempId,
         title: '新对话',
         pinned: false,
-        messageCount: 0
+        messageCount: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       }
-
       sessions.value.unshift(newSession)
       sortSessions()
       currentSessionId.value = newSession.id
