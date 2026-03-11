@@ -1,5 +1,8 @@
 <template>
   <div class="messages" ref="messagesRef">
+    <div class="messages-header" v-if="messages.length > 0">
+      <ExportButton />
+    </div>
     <div class="messages-inner">
       <MessageItem
         v-for="msg in messages"
@@ -24,6 +27,7 @@
 import { ref, watch, nextTick, computed } from 'vue'
 import MessageItem from './MessageItem.vue'
 import ThinkingBlock from '@/components/workflow/ThinkingBlock.vue'
+import ExportButton from './ExportButton.vue'
 import { useChatStore } from '@/stores/chat'
 
 const chatStore = useChatStore()
@@ -84,6 +88,15 @@ defineExpose({
 /* 消息区 */
 .messages { 
   flex: 1; 
+}
+
+.messages-header {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 24px 0;
+  max-width: 860px;
+  margin: 0 auto;
+  width: 100%;
 }
 
 .messages-inner { 
