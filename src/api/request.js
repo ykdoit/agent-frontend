@@ -22,6 +22,10 @@ class RequestError extends Error {
   }
 }
 
+function generateRequestId() {
+  return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)
+}
+
 /**
  * 基础请求方法
  */
@@ -40,6 +44,7 @@ async function request(url, options = {}) {
     method,
     headers: {
       'Content-Type': 'application/json',
+      'X-Request-ID': generateRequestId(),
       ...headers,
     },
     signal: controller.signal,
