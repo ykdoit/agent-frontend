@@ -62,6 +62,9 @@ onMounted(async () => {
  * 监听路由变化，切换会话并加载历史
  */
 watch(() => route.params.id, async (newId) => {
+  // Disconnect any active SSE stream before switching sessions
+  chat.disconnect()
+
   if (newId) {
     // 设置当前会话
     sessionStore.switchSession(newId)
@@ -70,7 +73,7 @@ watch(() => route.params.id, async (newId) => {
     if (session?.sessionId) {
       await chatStore.loadHistory(session.sessionId)
     }
-    
+
     // 如果有待发送的消息，发送它
     if (pendingMessage.value) {
       chat.inputText.value = pendingMessage.value
