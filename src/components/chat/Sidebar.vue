@@ -18,8 +18,43 @@
       </svg>
       <span v-if="!sidebarCollapsed">发起新对话</span>
     </button>
+
+    <!-- 搜索框 -->
+    <div class="search-box" v-if="!sidebarCollapsed">
+      <input
+        v-model="searchInput"
+        class="search-input"
+        placeholder="搜索对话..."
+        @input="onSearchInput"
+      />
+      <svg v-if="!searchInput" class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+      </svg>
+      <button v-else class="search-clear" @click="clearSearch">✕</button>
+    </div>
+
+    <!-- 搜索结果 -->
+    <div class="search-results" v-if="!sidebarCollapsed && sessionStore.searchQuery">
+      <div v-if="sessionStore.searchLoading" class="search-loading">搜索中...</div>
+      <div v-else-if="sessionStore.searchResults.length === 0" class="search-empty">无匹配结果</div>
+      <div
+        v-else
+        v-for="result in sessionStore.searchResults"
+        :key="result.session_id"
+        class="search-result-item"
+        @click="switchChat(result.session_id)"
+      >
+        <div class="result-title" v-html="highlight(result.title, sessionStore.searchQuery)"></div>
+        <div
+          v-for="(msg, i) in result.matched_messages"
+          :key="i"
+          class="result-snippet"
+          v-html="highlight(msg.snippet, sessionStore.searchQuery)"
+        ></div>
+      </div>
+    </div>
     
-    <div class="chat-list" v-if="!sidebarCollapsed">
+    <div class="chat-list" v-if="!sidebarCollapsed && !sessionStore.searchQuery">
       <div class="chat-section-title">对话历史</div>
       <div
         v-for="session in sessions"
@@ -101,6 +136,34 @@ const sidebarCollapsed = ref(false)
 const editingChatId = ref(null)
 const editingTitle = ref('')
 const renameInput = ref(null)
+
+// 搜索相关
+const searchInput = ref('')
+let searchTimer = null
+
+function onSearchInput() {
+  clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => {
+    sessionStore.searchSessions(searchInput.value)
+  }, 300)
+}
+
+function clearSearch() {
+  searchInput.value = ''
+  sessionStore.searchSessions('')
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+}
+
+function highlight(text, query) {
+  if (!query || !text) return escapeHtml(text || '')
+  // Escape HTML first to prevent XSS, then wrap keyword in <mark>
+  const safe = escapeHtml(text)
+  const safeQuery = escapeHtml(query).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return safe.replace(new RegExp(safeQuery, 'gi'), match => `<mark>${match}</mark>`)
+}
 
 const sessions = computed(() => sessionStore.sessions)
 const currentSessionId = computed(() => sessionStore.currentSessionId)
@@ -470,5 +533,86 @@ function cancelRename() {
     transform: translateX(0);
     box-shadow: var(--shadow-lg);
   }
+}
+
+/* 搜索框 */
+.search-box {
+  position: relative;
+  margin: 8px 12px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 8px 32px 8px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.search-input:focus {
+  border-color: var(--accent);
+}
+
+.search-icon, .search-clear {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-size: 12px;
+}
+
+.search-results {
+  padding: 0 8px;
+  overflow-y: auto;
+  max-height: 40vh;
+}
+
+.search-loading, .search-empty {
+  padding: 12px;
+  font-size: 13px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.search-result-item {
+  padding: 10px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.search-result-item:hover {
+  background: var(--bg-hover);
+}
+
+.result-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.result-snippet {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+:deep(mark) {
+  background: rgba(66, 133, 244, 0.3);
+  color: var(--text-primary);
+  border-radius: 2px;
+  padding: 0 2px;
 }
 </style>

@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { sessionApi } from '@/api'
+import { get } from '@/api/request'
 
 /**
  * 会话状态管理
@@ -229,10 +230,37 @@ export const useSessionStore = defineStore('session', () => {
     }
   }
 
+  // ============== 搜索 ==============
+  const searchResults = ref([])
+  const searchLoading = ref(false)
+  const searchQuery = ref('')
+
+  async function searchSessions(query) {
+    if (!query.trim()) {
+      searchResults.value = []
+      searchQuery.value = ''
+      return
+    }
+    searchLoading.value = true
+    searchQuery.value = query
+    try {
+      const data = await get('/sessions/search', { q: query })
+      searchResults.value = data.results || []
+    } catch (e) {
+      console.error('搜索失败:', e)
+      searchResults.value = []
+    } finally {
+      searchLoading.value = false
+    }
+  }
+
   return {
     // State
     sessions,
     currentSessionId,
+    searchResults,
+    searchLoading,
+    searchQuery,
 
     // Computed
     currentSession,
@@ -247,5 +275,6 @@ export const useSessionStore = defineStore('session', () => {
     togglePinSession,
     refreshTitles,
     updateSessionId,
+    searchSessions,
   }
 })
