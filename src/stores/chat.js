@@ -65,26 +65,27 @@ export const useChatStore = defineStore('chat', () => {
       messagesMap.value[sessionId] = []
     }
     messagesMap.value[sessionId].push(message)
+    return message.id  // return ID for caller to track
   }
 
   /**
    * 更新消息
    */
-  function updateMessage(sessionId, messageIndex, content) {
+  function updateMessage(sessionId, messageId, content) {
     const messages = messagesMap.value[sessionId]
-    if (messages && messages[messageIndex]) {
-      messages[messageIndex].content = content
-    }
+    if (!messages) return
+    const msg = messages.find(m => m.id === messageId)
+    if (msg) msg.content = content
   }
 
   /**
    * 追加消息内容（流式输出）
    */
-  function appendMessageContent(sessionId, messageIndex, content) {
+  function appendMessageContent(sessionId, messageId, content) {
     const messages = messagesMap.value[sessionId]
-    if (messages && messages[messageIndex]) {
-      messages[messageIndex].content += content
-    }
+    if (!messages) return
+    const msg = messages.find(m => m.id === messageId)
+    if (msg) msg.content += content
   }
 
   /**

@@ -50,6 +50,13 @@ const chat = useChat()
 const { theme, loadTheme } = useTheme()
 const currentTheme = theme
 
+// Auto-dismiss error toast after 5 seconds
+watch(() => chatStore.error, (err) => {
+  if (err) {
+    setTimeout(() => chatStore.clearError(), 5000)
+  }
+})
+
 // 待发送的消息（用于首页创建会话后发送）
 const pendingMessage = ref('')
 

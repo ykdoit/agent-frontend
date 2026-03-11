@@ -17,7 +17,7 @@ export function useChat() {
   const connectionManager = new SSEConnectionManager()
   const inputText = ref('')
   
-  let currentAiMsgIndex = -1
+  let currentAiMsgId = null
   let currentSessionId = null
 
   /**
