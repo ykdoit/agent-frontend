@@ -7,7 +7,7 @@
  * - 响应拦截
  */
 
-const API_BASE_URL = 'http://localhost:8000'
+const API_BASE_URL = 'http://localhost:8088'
 const DEFAULT_TIMEOUT = 120000 // 2分钟
 
 /**

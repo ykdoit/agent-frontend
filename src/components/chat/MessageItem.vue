@@ -83,9 +83,17 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import MarkdownIt from 'markdown-it'
+import DOMPurify from 'dompurify'
 import { parseStreamContent } from '@/composables/useWorkflow'
 import { useChatStore } from '@/stores/chat'
 import ConfirmationCard from '@/components/common/ConfirmationCard.vue'
+
+const md = new MarkdownIt({
+  html: false,
+  breaks: true,
+  linkify: true,
+})
 
 const props = defineProps({
   message: {
@@ -141,21 +149,12 @@ function onTimeSelect(time) {
   emit('selectTime', time)
 }
 
-// 格式化最终内容
+// 格式化最终内容（markdown-it 渲染）
 const formattedContent = computed(() => {
-  let content = parsed.value.displayContent
+  const content = parsed.value.displayContent
   if (!content) return ''
-
-  content = content
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-  content = content.replace(/\n/g, '<br>')
-  content = content.replace(/<br>\s*<br>/g, '<br>')
-  content = content.replace(/^<br>/, '')
-  content = content.replace(/<br>$/g, '')
-
-  return content
+  const html = md.render(content)
+  return DOMPurify.sanitize(html)
 })
 
 // 复制内容
@@ -313,7 +312,102 @@ function retry() {
   font-size: 15px;
   line-height: 1.7;
   color: var(--text-primary);
-  white-space: pre-wrap;
+}
+
+.ai-text :deep(p) {
+  margin: 6px 0;
+}
+
+.ai-text :deep(h1),
+.ai-text :deep(h2),
+.ai-text :deep(h3),
+.ai-text :deep(h4) {
+  margin: 14px 0 6px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.ai-text :deep(ul),
+.ai-text :deep(ol) {
+  padding-left: 22px;
+  margin: 8px 0;
+}
+
+.ai-text :deep(li) {
+  margin: 4px 0;
+}
+
+.ai-text :deep(code) {
+  background: var(--bg-tertiary);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Fira Code', 'JetBrains Mono', monospace;
+  font-size: 13px;
+}
+
+.ai-text :deep(pre) {
+  background: var(--bg-tertiary);
+  padding: 14px 18px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 10px 0;
+}
+
+.ai-text :deep(pre code) {
+  background: none;
+  padding: 0;
+  font-size: 13px;
+}
+
+.ai-text :deep(blockquote) {
+  border-left: 3px solid var(--accent);
+  padding-left: 14px;
+  margin: 10px 0;
+  color: var(--text-secondary);
+}
+
+.ai-text :deep(strong) {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.ai-text :deep(em) {
+  font-style: italic;
+  color: var(--text-secondary);
+}
+
+.ai-text :deep(a) {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.ai-text :deep(a:hover) {
+  text-decoration: underline;
+}
+
+.ai-text :deep(hr) {
+  border: none;
+  border-top: 1px solid var(--border-color);
+  margin: 14px 0;
+}
+
+.ai-text :deep(table) {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 10px 0;
+  font-size: 14px;
+}
+
+.ai-text :deep(th),
+.ai-text :deep(td) {
+  border: 1px solid var(--border-color);
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.ai-text :deep(th) {
+  background: var(--bg-tertiary);
+  font-weight: 600;
 }
 
 /* 加载动画 */
