@@ -34,12 +34,13 @@
 </template>
 
 <script setup>
-import { onMounted, watch, ref } from 'vue'
+import { onMounted, watch, ref, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useChatStore } from '@/stores/chat'
 import { useSessionStore } from '@/stores/session'
 import { useChat } from '@/composables/useChat'
 import { useTheme } from '@/composables/useTheme'
+import { useWebSocket } from '@/composables/useWebSocket'
 import { Sidebar, ChatInput } from '@/components/chat'
 
 const router = useRouter()
@@ -49,20 +50,30 @@ const sessionStore = useSessionStore()
 const chat = useChat()
 const { theme, loadTheme } = useTheme()
 const currentTheme = theme
+const { start: wsStart, stop: wsStop } = useWebSocket()
 
 // Auto-dismiss error toast after 5 seconds
+// 用 ref 追踪 timer，避免手动关闭后旧 timer 仍触发
+let errorDismissTimer = null
 watch(() => chatStore.error, (err) => {
+  clearTimeout(errorDismissTimer)
   if (err) {
-    setTimeout(() => chatStore.clearError(), 5000)
+    errorDismissTimer = setTimeout(() => chatStore.clearError(), 5000)
   }
 })
+onUnmounted(() => clearTimeout(errorDismissTimer))
 
 // 待发送的消息（用于首页创建会话后发送）
 const pendingMessage = ref('')
 
 onMounted(async () => {
   loadTheme()
+  wsStart()
   await sessionStore.loadSessions()
+})
+
+onUnmounted(() => {
+  wsStop()
 })
 
 /**
@@ -71,6 +82,9 @@ onMounted(async () => {
 watch(() => route.params.id, async (newId) => {
   // Disconnect any active SSE stream before switching sessions
   chat.disconnect()
+  // Reset loading state in case SSE was aborted mid-stream (AbortError skips onComplete)
+  chatStore.setLoading(false)
+  chatStore.clearStatus()
 
   if (newId) {
     // 设置当前会话

@@ -23,7 +23,15 @@ class RequestError extends Error {
 }
 
 function generateRequestId() {
-  return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)
+  if (crypto.randomUUID) return crypto.randomUUID()
+  // Fallback: 用 getRandomValues 生成符合 UUID v4 格式的字符串，碰撞率极低
+  const bytes = new Uint8Array(16)
+  crypto.getRandomValues(bytes)
+  bytes[6] = (bytes[6] & 0x0f) | 0x40
+  bytes[8] = (bytes[8] & 0x3f) | 0x80
+  return [...bytes].map((b, i) =>
+    ([4, 6, 8, 10].includes(i) ? '-' : '') + b.toString(16).padStart(2, '0')
+  ).join('')
 }
 
 /**

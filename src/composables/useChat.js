@@ -3,9 +3,15 @@ import { useChatStore } from '@/stores/chat'
 import { useSessionStore } from '@/stores/session'
 import { chatApi, SSEConnectionManager } from '@/api'
 
+// 模块级计数器，避免同毫秒内 ID 碰撞
+let _msgCounter = 0
+function genMsgId(prefix = 'msg') {
+  return `${prefix}-${Date.now()}-${++_msgCounter}`
+}
+
 /**
  * 聊天 Composable
- * 
+ *
  * 职责：
  * - 处理用户输入验证
  * - 管理 SSE 连接
@@ -133,7 +139,7 @@ export function useChat() {
     
     // 添加用户消息
     chatStore.addMessage(session.id, {
-      id: Date.now().toString(),
+      id: genMsgId('user'),
       role: 'user',
       content: text
     })
@@ -151,12 +157,14 @@ export function useChat() {
     chatStore.clearThinking()
     chatStore.clearStatus()
     
-    // 添加空的 AI 消息
-    const aiMsgId = 'ai-' + Date.now()
+    // 添加空的 AI 消息，streaming: true 表示正在流式输出
+    // 切换会话时若仍为 true，回来后会强制重新拉服务器数据
+    const aiMsgId = genMsgId('ai')
     chatStore.addMessage(session.id, {
       id: aiMsgId,
       role: 'assistant',
-      content: ''
+      content: '',
+      streaming: true
     })
 
     currentAiMsgId = aiMsgId
@@ -173,10 +181,14 @@ export function useChat() {
       handleSSEEvent,
       (error) => {
         chatStore.appendMessageContent(currentSessionId, currentAiMsgId, '抱歉，发生了网络错误，请稍后重试。')
+        // 出错也算结束，标记 complete 避免回来时误判为"被中断"
+        chatStore.markMessageComplete(currentSessionId, currentAiMsgId)
         chatStore.setError(error)
         chatStore.clearStatus()
       },
       () => {
+        // 流式输出正常完成，标记消息为 complete
+        chatStore.markMessageComplete(currentSessionId, currentAiMsgId)
         chatStore.setLoading(false)
         chatStore.clearStatus()
         scrollToBottom()
@@ -198,9 +210,9 @@ export function useChat() {
     
     const userMsg = messages[msgIndex - 1]
     if (userMsg.role !== 'user') return
-    
-    // 移除 AI 消息
-    messages.splice(msgIndex, 1)
+
+    // 通过 store action 移除 AI 消息，保持响应式完整性
+    chatStore.removeMessage(sessionId, msg.id)
     inputText.value = userMsg.content
     await sendMessage()
   }

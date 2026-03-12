@@ -1,14 +1,11 @@
 <template>
   <div class="messages" ref="messagesRef">
-    <div class="messages-header" v-if="messages.length > 0">
-      <ExportButton />
-    </div>
     <div class="messages-inner">
       <MessageItem
         v-for="msg in messages"
         :key="msg.id"
         :message="msg"
-        :loading="loading && msg.id === messages[messages.length - 1]?.id"
+        :loading="(loading && msg.id === messages[messages.length - 1]?.id) || (msg.streaming && msg.role === 'assistant')"
         @retry="retryMessage"
         @select-time="onSelectTime"
       />
@@ -27,7 +24,6 @@
 import { ref, watch, nextTick, computed } from 'vue'
 import MessageItem from './MessageItem.vue'
 import ThinkingBlock from '@/components/workflow/ThinkingBlock.vue'
-import ExportButton from './ExportButton.vue'
 import { useChatStore } from '@/stores/chat'
 
 const chatStore = useChatStore()
@@ -73,10 +69,10 @@ function scrollToBottom() {
   })
 }
 
-// 监听消息变化，自动滚动
-watch(() => props.messages, () => {
+// 只监听消息数量变化，避免 deep watch 在每次流式 token 到来时触发
+watch(() => props.messages.length, () => {
   scrollToBottom()
-}, { deep: true })
+})
 
 // 暴露方法给父组件
 defineExpose({
@@ -86,20 +82,11 @@ defineExpose({
 
 <style scoped>
 /* 消息区 */
-.messages { 
-  flex: 1; 
+.messages {
+  flex: 1;
 }
 
-.messages-header {
-  display: flex;
-  justify-content: flex-end;
-  padding: 8px 24px 0;
-  max-width: 860px;
-  margin: 0 auto;
-  width: 100%;
-}
-
-.messages-inner { 
+.messages-inner {
   max-width: 860px; 
   margin: 0 auto; 
   padding: 24px;

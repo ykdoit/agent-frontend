@@ -2,7 +2,11 @@
   <div class="chat-view">
     <!-- 顶部标题栏 -->
     <header class="chat-header">
+      <div class="header-side"></div>
       <h1 class="chat-title">{{ sessionStore.currentSession?.title || '智能办公助手' }}</h1>
+      <div class="header-side header-actions">
+        <ExportButton v-if="messages.length > 0" />
+      </div>
     </header>
 
     <!-- 消息区 -->
@@ -23,6 +27,7 @@ import { useChatStore } from '@/stores/chat'
 import { useSessionStore } from '@/stores/session'
 import { useChat } from '@/composables/useChat'
 import { MessageList } from '@/components/chat'
+import ExportButton from '@/components/chat/ExportButton.vue'
 
 const chatStore = useChatStore()
 const sessionStore = useSessionStore()
@@ -61,14 +66,27 @@ function onSelectTime(time) {
 }
 
 .chat-header {
-  padding: 16px 24px;
-  text-align: center;
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
   background: var(--bg-primary);
   border-bottom: 1px solid var(--border-color);
   position: sticky;
   top: 0;
   z-index: 10;
   transition: background var(--transition-normal), border-color var(--transition-normal);
+}
+
+/* 两侧各占 flex:1，标题自然居中 */
+.header-side {
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.header-actions {
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .chat-title {
@@ -79,5 +97,6 @@ function onSelectTime(time) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: center;
 }
 </style>

@@ -83,6 +83,8 @@ export class SSEConnectionManager {
         const delay = this.getReconnectDelay()
         console.log(`${delay/1000}秒后尝试重连 (${this.reconnectAttempts + 1}/${this.maxReconnectAttempts})`)
         await new Promise(resolve => setTimeout(resolve, delay))
+        // 等待期间用户可能已调用 disconnect()，再次检查
+        if (!this.shouldReconnect) return
         this.reconnectAttempts++
         this.isConnecting = false
         await this.connect(url, body, onMessage, onError, onComplete)
@@ -102,7 +104,7 @@ export class SSEConnectionManager {
       this.abortController = null
     }
     if (this.reader) {
-      this.reader.cancel()
+      this.reader.cancel().catch(() => {})  // 忽略 already-aborted 的 rejection
       this.reader = null
     }
     this.reconnectAttempts = 0

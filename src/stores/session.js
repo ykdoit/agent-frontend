@@ -80,10 +80,15 @@ export const useSessionStore = defineStore('session', () => {
       // 网络失败时使用本地缓存
       const saved = localStorage.getItem('sessions')
       if (saved) {
-        sessions.value = JSON.parse(saved)
-        sortSessions()
-        if (sessions.value.length > 0) {
-          return true
+        try {
+          sessions.value = JSON.parse(saved)
+          sortSessions()
+          if (sessions.value.length > 0) {
+            return true
+          }
+        } catch (parseErr) {
+          console.error('本地缓存数据损坏，已清除:', parseErr)
+          localStorage.removeItem('sessions')
         }
       }
       return false

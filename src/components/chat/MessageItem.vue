@@ -82,7 +82,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onUnmounted } from 'vue'
 import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
 import { parseStreamContent } from '@/composables/useWorkflow'
@@ -109,11 +109,12 @@ const props = defineProps({
 const emit = defineEmits(['copy', 'retry', 'selectTime'])
 const chatStore = useChatStore()
 
-const copied = ref('')
+const copied = ref(false)
 const timeSelected = ref('')
 const confirmationHandled = ref(false)
+let copiedTimer = null
 
-// 时间选项映射
+// 时间选项映射（注意：parsed 是本地 computed，不是 prop）
 const timeOptions = computed(() => {
   const map = {
     'AM': '上午',
@@ -121,7 +122,7 @@ const timeOptions = computed(() => {
     'NIGHT': '晚上',
     'ALL': '全天'
   }
-  return (props.parsed?.timePicker?.options || ['AM', 'PM', 'NIGHT', 'ALL']).map(opt => ({
+  return (parsed.value?.timePicker?.options || ['AM', 'PM', 'NIGHT', 'ALL']).map(opt => ({
     value: opt,
     label: map[opt] || opt
   }))
@@ -162,7 +163,8 @@ async function copyContent() {
   try {
     await navigator.clipboard.writeText(props.message.content)
     copied.value = true
-    setTimeout(() => {
+    clearTimeout(copiedTimer)
+    copiedTimer = setTimeout(() => {
       copied.value = false
     }, 2000)
     emit('copy', props.message.content)
@@ -170,6 +172,11 @@ async function copyContent() {
     console.error('复制失败:', e)
   }
 }
+
+// 组件卸载时清理 timer，避免操作已销毁的响应式状态
+onUnmounted(() => {
+  clearTimeout(copiedTimer)
+})
 
 // 重试
 function retry() {

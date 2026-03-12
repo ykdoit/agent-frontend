@@ -15,6 +15,10 @@ const routes = [
     name: 'chat',
     component: () => import('@/views/Chat.vue'),
     meta: { title: '对话' }
+  },
+  {
+    path: '/:pathMatch(.*)*',
+    redirect: '/'
   }
 ]
 
