@@ -1,8 +1,25 @@
 <template>
   <div class="input-area">
     <div class="input-container">
+      <!-- 模型选择器 -->
+      <div class="model-selector">
+        <select
+          v-model="localModel"
+          class="model-select"
+          :disabled="loading"
+        >
+          <option
+            v-for="model in sessionStore.models"
+            :key="model.id"
+            :value="model.id"
+          >
+            {{ model.root || model.name || model.id }}
+          </option>
+        </select>
+      </div>
+
       <div class="input-box">
-        <textarea 
+        <textarea
           v-model="localInputText"
           @keydown.enter.exact.prevent="sendMessage"
           @keydown.enter.shift.exact="() => {}"
@@ -12,7 +29,7 @@
         ></textarea>
         <div class="input-actions">
           <!-- 清空按钮 -->
-          <button 
+          <button
             v-if="localInputText.trim()"
             class="action-btn clear-btn"
             title="清空输入"
@@ -23,11 +40,11 @@
               <line x1="6" y1="6" x2="18" y2="18"></line>
             </svg>
           </button>
-          
+
           <button
-            class="send-btn" 
+            class="send-btn"
             :class="{ active: localInputText.trim() && !loading }"
-            :disabled="!localInputText.trim() || loading" 
+            :disabled="!localInputText.trim() || loading"
             @click="sendMessage"
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -46,6 +63,9 @@
 
 <script setup>
 import { ref, watch } from 'vue'
+import { useSessionStore } from '@/stores/session'
+
+const sessionStore = useSessionStore()
 
 const props = defineProps({
   loading: {
@@ -61,6 +81,7 @@ const props = defineProps({
 const emit = defineEmits(['send', 'update:modelValue'])
 
 const localInputText = ref(props.modelValue)
+const localModel = ref(sessionStore.currentModel)
 const inputRef = ref(null)
 
 // 同步父组件的值
@@ -70,6 +91,11 @@ watch(() => props.modelValue, (newVal) => {
 
 watch(localInputText, (newVal) => {
   emit('update:modelValue', newVal)
+})
+
+// 监听模型变化，同步到 store
+watch(localModel, (newModel) => {
+  sessionStore.setCurrentModel(newModel)
 })
 
 function sendMessage() {
@@ -97,6 +123,37 @@ function clearInput() {
 .input-container {
   max-width: 860px;
   margin: 0 auto;
+}
+
+/* 模型选择器 */
+.model-selector {
+  margin-bottom: 12px;
+}
+
+.model-select {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: 13px;
+  padding: 6px 12px;
+  cursor: pointer;
+  outline: none;
+  transition: all var(--transition-fast);
+}
+
+.model-select:hover {
+  border-color: var(--accent);
+}
+
+.model-select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-light);
+}
+
+.model-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .input-box {

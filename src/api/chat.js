@@ -1,9 +1,10 @@
 /**
  * 聊天 API
- * 
+ *
  * 职责：
  * - 聊天消息相关操作
  * - 会话恢复
+ * - 模型列表
  */
 
 import { get, post, getFullUrl } from './request'
@@ -12,6 +13,23 @@ import { get, post, getFullUrl } from './request'
  * 聊天 API
  */
 export const chatApi = {
+  /**
+   * 获取可用模型列表
+   * @returns {Promise<Array>}
+   */
+  getModels() {
+    return get('/v1/models')
+  },
+
+  /**
+   * 获取指定模型详情
+   * @param {string} modelId - 模型 ID
+   * @returns {Promise<Object>}
+   */
+  getModel(modelId) {
+    return get(`/v1/models/${modelId}`)
+  },
+
   /**
    * 恢复挂起的会话
    * @param {string} sessionId - 会话 ID

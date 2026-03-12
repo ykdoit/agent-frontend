@@ -173,7 +173,7 @@ export function useChat() {
     await connectionManager.connect(
       chatApi.getChatCompletionsUrl(),
       {
-        model: 'Pro/zai-org/GLM-4.7',
+        model: sessionStore.currentModel,  // 使用当前选择的模型
         message: text,
         session_id: session.sessionId,
         stream: true

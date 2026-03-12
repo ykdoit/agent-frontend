@@ -1,20 +1,26 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { sessionApi } from '@/api'
+import { sessionApi, chatApi } from '@/api'
 import { get } from '@/api/request'
 
 /**
  * 会话状态管理
- * 
+ *
  * 职责：
  * - 会话列表管理
  * - 会话 CRUD 操作
  * - 当前会话切换
+ * - 模型选择管理
  */
 export const useSessionStore = defineStore('session', () => {
   // ============== State ==============
   const sessions = ref([])
   const currentSessionId = ref(null)
+
+  // 模型相关
+  const models = ref([])
+  const currentModel = ref('glm-5')  // 默认模型
+  const modelsLoading = ref(false)
 
   // ============== Computed ==============
   const currentSession = computed(() => {
@@ -24,6 +30,43 @@ export const useSessionStore = defineStore('session', () => {
   const hasSessions = computed(() => {
     return sessions.value.length > 0
   })
+
+  // ============== 模型相关 ==============
+
+  /**
+   * 加载可用模型列表
+   */
+  async function loadModels() {
+    modelsLoading.value = true
+    try {
+      const data = await chatApi.getModels()
+      if (data.data && data.data.length > 0) {
+        models.value = data.data
+        // 如果当前模型不在列表中，自动切换到第一个
+        if (!models.value.find(m => m.id === currentModel.value)) {
+          currentModel.value = models.value[0].id
+        }
+      }
+    } catch (e) {
+      console.error('加载模型列表失败:', e)
+      // 失败时使用默认模型列表
+      models.value = [
+        { id: 'glm-5', root: 'GLM-5' },
+        { id: 'glm-4.7', root: 'GLM-4.7' },
+        { id: 'glm-4.7-flash', root: 'GLM-4.7 Flash' },
+        { id: 'glm-4.7-flashx', root: 'GLM-4.7 FlashX' },
+      ]
+    } finally {
+      modelsLoading.value = false
+    }
+  }
+
+  /**
+   * 切换当前模型
+   */
+  function setCurrentModel(modelId) {
+    currentModel.value = modelId
+  }
 
   // ============== 内部方法 ==============
 
@@ -267,6 +310,11 @@ export const useSessionStore = defineStore('session', () => {
     searchLoading,
     searchQuery,
 
+    // 模型相关
+    models,
+    currentModel,
+    modelsLoading,
+
     // Computed
     currentSession,
     hasSessions,
@@ -281,5 +329,7 @@ export const useSessionStore = defineStore('session', () => {
     refreshTitles,
     updateSessionId,
     searchSessions,
+    loadModels,
+    setCurrentModel,
   }
 })

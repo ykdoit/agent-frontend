@@ -70,6 +70,7 @@ onMounted(async () => {
   loadTheme()
   wsStart()
   await sessionStore.loadSessions()
+  await sessionStore.loadModels()  // 加载模型列表
 })
 
 onUnmounted(() => {
