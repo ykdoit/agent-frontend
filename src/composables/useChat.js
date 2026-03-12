@@ -104,7 +104,7 @@ export function useChat() {
         }
         if (json.error) {
           console.error('❌ Error:', json.error)
-          chatStore.appendMessageContent(currentSessionId, currentAiMsgIndex, `\n\n[错误: ${json.error}]`)
+          chatStore.appendMessageContent(currentSessionId, currentAiMsgId, `\n\n[错误: ${json.error}]`)
         }
         break
     }
@@ -112,7 +112,7 @@ export function useChat() {
     // 兼容 OpenAI 格式
     if (!eventType && json.choices?.[0]?.delta?.content) {
       const content = json.choices[0].delta.content
-      chatStore.appendMessageContent(currentSessionId, currentAiMsgIndex, content)
+      chatStore.appendMessageContent(currentSessionId, currentAiMsgId, content)
       scrollToBottom()
     }
   }
@@ -152,13 +152,14 @@ export function useChat() {
     chatStore.clearStatus()
     
     // 添加空的 AI 消息
+    const aiMsgId = 'ai-' + Date.now()
     chatStore.addMessage(session.id, {
-      id: 'ai-' + Date.now(),
+      id: aiMsgId,
       role: 'assistant',
       content: ''
     })
-    
-    currentAiMsgIndex = chatStore.getMessages(session.id).length - 1
+
+    currentAiMsgId = aiMsgId
     
     // 建立 SSE 连接
     await connectionManager.connect(
@@ -171,7 +172,7 @@ export function useChat() {
       },
       handleSSEEvent,
       (error) => {
-        chatStore.appendMessageContent(currentSessionId, currentAiMsgIndex, '抱歉，发生了网络错误，请稍后重试。')
+        chatStore.appendMessageContent(currentSessionId, currentAiMsgId, '抱歉，发生了网络错误，请稍后重试。')
         chatStore.setError(error)
         chatStore.clearStatus()
       },
