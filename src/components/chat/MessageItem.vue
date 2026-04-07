@@ -38,6 +38,16 @@
           <!-- 文本内容 -->
           <div class="ai-text" v-html="formattedContent"></div>
 
+          <!-- 代码预览 -->
+          <div v-if="codeBlocks.length > 0" class="code-previews">
+            <CodePreview
+              v-for="(block, index) in codeBlocks"
+              :key="index"
+              :code="block.code"
+              :language="block.language"
+            />
+          </div>
+
           <!-- 时间选择器 -->
           <div v-if="parsed.timePicker && !timeSelected" class="time-picker">
             <button
@@ -88,6 +98,7 @@ import DOMPurify from 'dompurify'
 import { parseStreamContent } from '@/composables/useWorkflow'
 import { useChatStore } from '@/stores/chat'
 import ConfirmationCard from '@/components/common/ConfirmationCard.vue'
+import CodePreview from '@/components/common/CodePreview.vue'
 
 const md = new MarkdownIt({
   html: false,
@@ -136,6 +147,35 @@ const timeSelectedLabel = computed(() => {
 // 解析内容
 const parsed = computed(() => {
   return parseStreamContent(props.message.content)
+})
+
+// 提取可运行的代码块（HTML/JS）
+const codeBlocks = computed(() => {
+  const content = props.message.content
+  const blocks = []
+
+  // 匹配 ```html 或 ```htm 或 ```js 代码块
+  const codeBlockRegex = /```(html|htm|js|javascript)\n([\s\S]*?)```/g
+  let match
+
+  while ((match = codeBlockRegex.exec(content)) !== null) {
+    const language = match[1].toLowerCase()
+    let code = match[2]
+
+    // 如果是 JS，包装成 HTML（使用字符串拼接避免 Vue 编译错误）
+    if (language === 'js' || language === 'javascript') {
+      code = '<!DOCTYPE html>' +
+        '<html><head><meta charset="UTF-8"><title>JS Preview</title></head>' +
+        '<body><script>' + code + '<\/script></body></html>'
+    }
+
+    blocks.push({
+      language: language === 'js' || language === 'javascript' ? 'javascript' : 'html',
+      code: code.trim()
+    })
+  }
+
+  return blocks
 })
 
 // 处理确认操作
